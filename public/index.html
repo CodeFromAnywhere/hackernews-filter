@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hacker News - Filtered Stories</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-6 text-center text-orange-600">Hacker News - Filtered Stories</h1>
+
+        <div id="userInputs" class="mb-8 space-y-4">
+            <div>
+                <label for="apiKey" class="block text-sm font-medium text-gray-700">OpenAI API Key <a target="_blank"
+                        class="text-blue-500" href="https://platform.openai.com/api-keys">(get one)</a>:</label>
+                <input type="password" id="apiKey"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+            </div>
+            <div>
+                <label for="preferences" class="block text-sm font-medium text-gray-700">Topic Preferences:</label>
+                <textarea id="preferences" rows="4"
+                    class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"></textarea>
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <label for="storyType" class="block text-sm font-medium text-gray-700">Story Type:</label>
+                    <select id="storyType" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                        <option value="newstories">New Stories</option>
+                        <option value="topstories">Top Stories</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="storyAmount" class="block text-sm font-medium text-gray-700">Number of Stories:</label>
+                    <select id="storyAmount" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2">
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center justify-between">
+                <button id="reloadStories"
+                    class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                    Reload Stories
+                </button>
+                <div class="flex items-center">
+                    <input type="checkbox" id="hideIrrelevant" class="mr-2">
+                    <label for="hideIrrelevant" class="text-sm font-medium text-gray-700">Hide irrelevant</label>
+                </div>
+            </div>
+        </div>
+
+        <div id="storiesList" class="space-y-4"></div>
+    </div>
+
+    <script>
+        let cachedStories = JSON.parse(localStorage.getItem('cachedStories')) || [];
+
+        function savePreferences() {
+            const apiKey = document.getElementById('apiKey').value;
+            const preferences = document.getElementById('preferences').value;
+            const hideIrrelevant = document.getElementById('hideIrrelevant').checked;
+            const storyType = document.getElementById('storyType').value;
+            const storyAmount = document.getElementById('storyAmount').value;
+
+            localStorage.setItem('openaiApiKey', apiKey);
+            localStorage.setItem('topicPreferences', preferences);
+            localStorage.setItem('hideIrrelevant', hideIrrelevant);
+            localStorage.setItem('storyType', storyType);
+            localStorage.setItem('storyAmount', storyAmount);
+
+            displayStoriesFromCache();
+        }
+
+        // Add event listeners for input changes
+        document.getElementById('apiKey').addEventListener('input', savePreferences);
+        document.getElementById('preferences').addEventListener('input', savePreferences);
+        document.getElementById('hideIrrelevant').addEventListener('change', savePreferences);
+        document.getElementById('storyType').addEventListener('change', savePreferences);
+        document.getElementById('storyAmount').addEventListener('change', savePreferences);
+
+        document.getElementById('reloadStories').addEventListener('click', fetchAndDisplayStories);
+
+        // Load saved preferences
+        document.getElementById('apiKey').value = localStorage.getItem('openaiApiKey') || '';
+        document.getElementById('preferences').value = localStorage.getItem('topicPreferences') || '';
+        document.getElementById('hideIrrelevant').checked = localStorage.getItem('hideIrrelevant') === 'true';
+        document.getElementById('storyType').value = localStorage.getItem('storyType') || 'newstories';
+        document.getElementById('storyAmount').value = localStorage.getItem('storyAmount') || '100';
+
+        async function fetchStories() {
+            const storyType = localStorage.getItem('storyType') || 'newstories';
+            const storyAmount = parseInt(localStorage.getItem('storyAmount') || '100');
+            try {
+                const response = await fetch(`https://hacker-news.firebaseio.com/v0/${storyType}.json`);
+                const storyIds = await response.json();
+                return storyIds.slice(0, storyAmount);
+            } catch (error) {
+                console.error('Error fetching stories:', error);
+                return [];
+            }
+        }
+
+        async function fetchStoryDetails(id) {
+            try {
+                const response = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching story ${id}:`, error);
+                return null;
+            }
+        }
+
+        async function checkStoryRelevance(story, preferences) {
+            const apiKey = localStorage.getItem('openaiApiKey');
+            if (!apiKey) {
+                return true; // If no API key is set, show all stories
+            }
+
+            const prompt = `
+                Given the following topic preferences:
+${preferences}
+
+Does this news story fit those preferences?
+Title: ${story.title}
+URL: ${story.url || 'N/A'}
+Text: ${story.text || 'N/A'}
+
+Answer with only 'true' or 'false'.`;
+
+            try {
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini",
+                        messages: [
+                            { role: "user", content: prompt }
+                        ],
+                        max_tokens: 1
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.choices[0].message.content.trim().toLowerCase() === 'true';
+            } catch (error) {
+                console.error('Error checking story relevance:', error);
+                return true; // Show the story if there's an error
+            }
+        }
+
+        function createStoryElement(story, isRelevant) {
+            const storyDiv = document.createElement('div');
+            storyDiv.className = `bg-white p-4 rounded shadow ${isRelevant ? '' : 'opacity-50'}`;
+            storyDiv.dataset.relevant = isRelevant;
+            storyDiv.innerHTML = `
+                <h2 class="text-xl font-semibold mb-2">
+                    <a href="${story.url || `https://news.ycombinator.com/item?id=${story.id}`}" target="_blank" class="text-blue-600 hover:underline">
+                        ${story.title}
+                    </a>
+                </h2>
+                <p class="text-sm text-gray-600 mb-2">
+                    By ${story.by} | ${story.score} points | ${new Date(story.time * 1000).toLocaleString()}
+                </p>
+                ${story.text ? `<p class="text-gray-800 mt-2">${story.text}</p>` : ''}
+            `;
+            return storyDiv;
+        }
+
+        async function fetchAndDisplayStories() {
+            const storiesList = document.getElementById('storiesList');
+            storiesList.innerHTML = '<p class="text-center">Loading stories...</p>';
+            const storyIds = await fetchStories();
+            const preferences = localStorage.getItem('topicPreferences') || '';
+
+            // Fetch all stories in parallel
+            const storyPromises = storyIds.map(id => fetchStoryDetails(id));
+            const stories = await Promise.all(storyPromises);
+
+            // Process stories and check relevance in parallel
+            const processedStoryPromises = stories.map(async story => {
+                if (story && story.type === 'story') {
+                    const isRelevant = await checkStoryRelevance(story, preferences);
+                    return { ...story, isRelevant };
+                }
+                return null;
+            });
+
+            cachedStories = (await Promise.all(processedStoryPromises)).filter(story => story !== null);
+
+            // Save to localStorage and display
+            localStorage.setItem('cachedStories', JSON.stringify(cachedStories));
+            displayStoriesFromCache();
+        }
+
+        function displayStoriesFromCache() {
+            const storiesList = document.getElementById('storiesList');
+            storiesList.innerHTML = '';
+            const hideIrrelevant = document.getElementById('hideIrrelevant').checked;
+
+            cachedStories.forEach(story => {
+                if (!hideIrrelevant || story.isRelevant) {
+                    const storyElement = createStoryElement(story, story.isRelevant);
+                    storiesList.appendChild(storyElement);
+                }
+            });
+        }
+
+        // Initial display from cache
+        displayStoriesFromCache();
+    </script>
+</body>
+
+</html>
