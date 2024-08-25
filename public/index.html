@@ -173,6 +173,9 @@ Answer with only 'true' or 'false'.`;
                     <a href="${story.url || `https://news.ycombinator.com/item?id=${story.id}`}" target="_blank" class="text-blue-600 hover:underline">
                         ${story.title}
                     </a>
+                    <a href="${`https://news.ycombinator.com/item?id=${story.id}`}" target="_blank" class="text-blue-600 hover:underline">
+                        (${story.descendants} Comments)
+                    </a>
                 </h2>
                 <p class="text-sm text-gray-600 mb-2">
                     By ${story.by} | ${story.score} points | ${new Date(story.time * 1000).toLocaleString()}
