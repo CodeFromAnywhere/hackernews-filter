@@ -169,7 +169,7 @@ Answer with only 'true' or 'false'.`;
             const storyDiv = document.createElement('div');
             storyDiv.className = `bg-white p-4 rounded shadow ${isRelevant ? '' : 'opacity-50'}`;
             storyDiv.dataset.relevant = isRelevant;
-            const tweetText = encodeURIComponent(`Check out this interesting story: ${story.title} ${story.url || `https://news.ycombinator.com/item?id=${story.id}`}`);
+            const tweetText = encodeURIComponent(`@${story.by} ${story.title} ${story.url || `https://news.ycombinator.com/item?id=${story.id}`}`);
             const tweetUrl = `https://twitter.com/intent/tweet?text=${tweetText}`;
             storyDiv.innerHTML = `
                 <h2 class="text-xl font-semibold mb-2">
