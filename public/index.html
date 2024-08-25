@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hacker News - Filtered Stories</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body class="bg-gray-100">
@@ -168,6 +169,8 @@ Answer with only 'true' or 'false'.`;
             const storyDiv = document.createElement('div');
             storyDiv.className = `bg-white p-4 rounded shadow ${isRelevant ? '' : 'opacity-50'}`;
             storyDiv.dataset.relevant = isRelevant;
+            const tweetText = encodeURIComponent(`Check out this interesting story: ${story.title} ${story.url || `https://news.ycombinator.com/item?id=${story.id}`}`);
+            const tweetUrl = `https://twitter.com/intent/tweet?text=${tweetText}`;
             storyDiv.innerHTML = `
                 <h2 class="text-xl font-semibold mb-2">
                     <a href="${story.url || `https://news.ycombinator.com/item?id=${story.id}`}" target="_blank" class="text-blue-600 hover:underline">
@@ -181,6 +184,11 @@ Answer with only 'true' or 'false'.`;
                     By ${story.by} | ${story.score} points | ${new Date(story.time * 1000).toLocaleString()}
                 </p>
                 ${story.text ? `<p class="text-gray-800 mt-2">${story.text}</p>` : ''}
+                <div class="mt-2">
+                    <a href="${tweetUrl}" target="_blank" class="text-blue-500 hover:underline">
+                        <i class="fab fa-twitter"></i> Tweet this
+                    </a>
+                </div>
             `;
             return storyDiv;
         }
